@@ -95,7 +95,12 @@ You are a scholarly research assistant. Preserve the user's named entities, time
 
 </details>
 
-### Frozen test prompts
+### Test prompts for the next run (v2)
+
+[Download the v2 question set](experiments/kg-web-eval/questions-v2.json). The harness
+takes each question as the positional argument to `scripts/run_agent.py`.
+The method question uses public clues so all three modes can look for the
+same paper.
 
 1. **`privacy-memory`.** Which published methods address privacy risks in long-term conversational memory for LLM agents? Compare their mechanisms and reported evaluation evidence, and cite the sources for each claim.
 
@@ -107,11 +112,13 @@ You are a scholarly research assistant. Preserve the user's named entities, time
 
 5. **`fixed-paper`.** Identify arXiv:2501.13956. Trace its main contribution and reported evaluation back to the paper, and distinguish source claims from any inferred scientific relationships.
 
-6. **`fixed-method`.** Identify the method recorded under entity:0012ecb7636053acec14be37acd3c204 in the project knowledge graph and trace it to its paper and source evidence. If the identifier cannot be resolved from the available evidence, explain that.
+6. **`method-from-description`.** Which published method uses configurable policies for people and events to control what an LLM agent can disclose from long-term memory? Identify the method and its paper, explain how the privacy controls work, and cite what the authors’ evaluation shows.
 
 7. **`empty`.** Does the project knowledge graph contain a source-backed method whose exact identifier is entity:does-not-exist? If you cannot verify the identifier, explain what the evidence supports.
 
-### Results
+### Completed results (v1)
+
+The table reports the [original frozen question set](https://github.com/cao8011158/research-agent/blob/03fb7e75c74ead883e0ed895bd447fbf2237e5f8/README.md#frozen-test-prompts). The `fixed-method` scores came from the original internal-ID control. The new `method-from-description` question is pending in all three modes.
 
 Each answer was scored on four rubric items worth up to two points each.
 The rubric covered correctness, source support, and evidence boundaries.
