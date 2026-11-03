@@ -119,13 +119,13 @@ QUESTIONS = (
     ('scientific-api-benchmarks', 'Use search_nodes to find benchmarks for paper-grounded scientific API agents. Explain which benchmark descriptions and paper sources are actually present, including an empty result if none qualify.'),
     ('unsupported-relation', 'Search for a method and a research problem, then ask whether the graph proves a SOLVES or EVALUATED_ON edge between them. Cite only available evidence and state the relation boundary explicitly.'),
     ('fixed-paper', 'Inspect paper arxiv:2501.13956 and trace its published source evidence without inventing scientific relations.'),
-    ('fixed-method', 'Inspect Method entity:0012ecb7636053acec14be37acd3c204 and its paper/source evidence.'),
+    ('method-from-description', "Which published method uses configurable policies for people and events to control what an LLM agent can disclose from long-term memory? Identify the method and its paper, explain how the privacy controls work, and cite what the authors’ evaluation shows."),
     ('empty', 'Find a source-backed Method whose exact node ID is entity:does-not-exist; if absent, say so without inventing a match.'),
 )
 # Evaluator hints are kept outside the agent prompts; these are not gold answers.
 REFERENCE_HINTS = {
     'fixed-paper': ('arxiv:2501.13956',),
-    'fixed-method': ('entity:0012ecb7636053acec14be37acd3c204',),
+    'method-from-description': ('arxiv:2609.35233',),
     'privacy-memory': ('area:0b98f6203c42760b4410820f92137641',),
     'scientific-api-benchmarks': ('entity:0014d3b42925cbe2170b2a71fed06811',),
 }
@@ -135,7 +135,7 @@ RUNS = [(mode, label, question) for label, question in QUESTIONS for mode in MOD
 print('First run:', len(RUNS), 'agent sessions; each has 4 steps, 6 tools, 180 seconds of harness time and a 240-second CLI limit')
 ```
 
-The natural-language tasks exercise retrieval without giving the agent an exact ID. Reference hints can guide later human inspection but are **not gold answers**. The published graph has `HAS_VERSION`, `HAS_SOURCE`, `HAS_ITEM`, `RESOLVES_TO`, and `MEMBER_OF`; it has no `SOLVES` or `EVALUATED_ON`. A plausible research claim from retrieved prose is not an observed graph edge. Extend `MAX_RUNS` to include the explicit relation-boundary, fixed-ID, and absent-ID controls after inspecting the first traces; retain empty/error outcomes rather than awarding correctness from a completed trace.
+The natural-language tasks exercise retrieval without giving the agent an exact ID. Reference hints can guide later human inspection but are **not gold answers**. The published graph has `HAS_VERSION`, `HAS_SOURCE`, `HAS_ITEM`, `RESOLVES_TO`, and `MEMBER_OF`; it has no `SOLVES` or `EVALUATED_ON`. A plausible research claim from retrieved prose is not an observed graph edge. Extend `MAX_RUNS` to include the explicit relation-boundary, public paper ID, method discovery, and absent-ID tasks after inspecting the first traces; retain empty/error outcomes rather than awarding correctness from a completed trace.
 
 ## Cell 11 — run the three tool modes with fresh trace directories
 
