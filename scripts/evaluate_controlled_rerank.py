@@ -19,7 +19,7 @@ def main(argv=None):
     parser.add_argument("--qrels", action="append", required=True, type=Path,
                         help="Repeat for disjoint curator files")
     parser.add_argument("--result", action="append", required=True,
-                        help="Provider result as voyage=PATH, jev=PATH, or assistant=PATH")
+                        help="Provider result as voyage=PATH, jev=PATH, assistant=PATH, or strata=PATH")
     parser.add_argument("--output", required=True, type=Path)
     args = parser.parse_args(argv)
     providers = {}
@@ -27,8 +27,8 @@ def main(argv=None):
         if "=" not in item:
             parser.error("--result must be NAME=PATH")
         name, path = item.split("=", 1)
-        if name not in ("voyage", "jev", "assistant") or name in providers:
-            parser.error("result NAME must be unique voyage, jev, or assistant")
+        if name not in ("voyage", "jev", "assistant", "strata") or name in providers:
+            parser.error("result NAME must be unique voyage, jev, assistant, or strata")
         providers[name] = _read(path)
     report = evaluate(_read(args.cases), [_read(p) for p in args.qrels], providers)
     args.output.parent.mkdir(parents=True, exist_ok=True)
