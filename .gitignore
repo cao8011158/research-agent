@@ -1,0 +1,13 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+*.egg-info/
+outputs/
+artifacts/
+.env
+.env.*
+!.env.example
+strata-data/
+strata-artifacts/
+*.log
