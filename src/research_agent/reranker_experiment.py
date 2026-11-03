@@ -148,15 +148,20 @@ def jev_payload(case, model="jev-1.14.0"):
     return body
 
 
-def run_jev(case, client, threshold=0.70):
+_MISSING = object()
+
+
+def run_jev(case, client, threshold=0.70, *, raw_response=_MISSING):
     if not _finite_score(threshold) or not 0 <= threshold <= 1:
         raise ValueError("threshold must be in [0,1]")
     started = utc_now()
     start = time.perf_counter()
     payload = jev_payload(case, getattr(client, "model", "jev-1.14.0"))
     call_start = time.perf_counter()
-    raw = client.decide(payload["state"], payload["questions"])
+    raw = client.decide(payload["state"], payload["questions"]) if raw_response is _MISSING else raw_response
     provider_call_s = time.perf_counter() - call_start
+    if not isinstance(raw, dict) or not isinstance(raw.get("model"), str) or not raw["model"]:
+        raise ValueError("Jev response missing resolved model")
     answers = raw.get("answers") if isinstance(raw, dict) else None
     ids = {c["candidate_id"] for c in case["candidates"]}
     if not isinstance(answers, dict) or set(answers) != ids:

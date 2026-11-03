@@ -1,12 +1,69 @@
 """Frozen hybrid retrieval: two independent top-ten lists, then one reranking pool."""
 from __future__ import annotations
 
-import asyncio
+import os
+import time
 
-from research_agent.reranker_experiment import run_jev
-from research_agent.strata_reranker import run_case
+from research_agent.reranker_experiment import run_jev, jev_payload
+from research_agent.strata_reranker import parse_ranking, request_for
 
 KINDS = ("Paper", "Method", "Benchmark", "ResearchProblem", "Contribution", "ResearchArea")
+
+
+class AsyncVoyageQueryEncoder:
+    """Official Voyage async query role with existing snapshot identity/shape checks."""
+
+    def __init__(self, encoder):
+        self.encoder = encoder
+        self.model_id = encoder.model_id
+        self.query_model_id = encoder.query_model_id
+        self.dimension = encoder.dimension
+
+    async def encode_query_async(self, texts, *, deadline):
+        import voyageai
+        if len(texts) != 1 or not isinstance(texts[0], str) or not texts[0].strip():
+            raise ValueError("one nonempty Voyage query is required")
+        key = os.environ.get("VOYAGE_API_KEY")
+        if not key:
+            raise RuntimeError("VOYAGE_API_KEY is required for Voyage encoding")
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise TimeoutError("agent time budget exhausted")
+        client = voyageai.AsyncClient(api_key=key, max_retries=0,
+                                      timeout=min(self.encoder.timeout, remaining))
+        response = await client.embed(texts, model=self.encoder.model_name,
+                                      input_type="query", output_dimension=self.dimension,
+                                      output_dtype="float", truncation=False)
+        return self.encoder._validate_result(response, 1)
+
+
+class AsyncJevClient:
+    """Async HTTP transport for the existing Jev payload and response validator."""
+
+    def __init__(self, *, timeout=120):
+        import httpx
+        from kg_builder.decision_api import ENDPOINT
+        key = os.environ.get("TYPESAFE_API_KEY")
+        if not key:
+            raise RuntimeError("TYPESAFE_API_KEY not set")
+        self.model = "jev-1.14.0"
+        self.endpoint = ENDPOINT
+        self.client = httpx.AsyncClient(timeout=timeout,
+                                        headers={"Authorization": f"Bearer {key}"})
+
+    async def __aenter__(self):
+        await self.client.__aenter__()
+        return self
+
+    async def __aexit__(self, *args):
+        await self.client.__aexit__(*args)
+
+    async def decide(self, payload, *, deadline):
+        if deadline - time.monotonic() <= 0:
+            raise TimeoutError("agent time budget exhausted")
+        response = await self.client.post(self.endpoint, json=payload)
+        response.raise_for_status()
+        return response.json()
 
 
 class RetrievalTools:
@@ -59,12 +116,12 @@ class RetrievalTools:
                     "top_k": {"type": "integer", "minimum": 1, "maximum": 20}},
                 "required": ["query"]}}}]
 
-    async def call(self, name: str, args: dict):
+    async def call(self, name: str, args: dict, *, deadline: float):
         if name != "search_nodes":
             raise ValueError("unknown retrieval tool")
-        return await asyncio.to_thread(self.search_nodes, **args)
+        return await self.search_nodes(**args, deadline=deadline)
 
-    def search_nodes(self, query: str, node_types=None, top_k=5):
+    async def search_nodes(self, query: str, node_types=None, top_k=5, *, deadline):
         self.last_audit = None
         if not isinstance(query, str) or not query.strip():
             raise ValueError("query must be nonempty")
@@ -75,8 +132,12 @@ class RetrievalTools:
             len(node_types) != len(set(node_types))):
             raise ValueError("invalid node_types")
         selected = node_types or None
+        if deadline - time.monotonic() <= 0:
+            raise TimeoutError("agent time budget exhausted")
         lexical = self.bm25.search(query, types=selected, top_k=10)
-        vector = self.encoder.encode_query([query])[0]
+        vector = (await self.encoder.encode_query_async([query], deadline=deadline))[0]
+        if deadline - time.monotonic() <= 0:
+            raise TimeoutError("agent time budget exhausted")
         semantic = self.dense.search(vector, types=selected, top_k=10)
         pool = {}
         for hit in semantic:
@@ -114,16 +175,32 @@ class RetrievalTools:
                 "candidates": [{"candidate_id": f"C{i:02d}", "node_id": c["node_id"],
                                 "type": c["type"], "text": c["text"]}
                                for i, c in enumerate(candidates, 1)]}
+        if deadline - time.monotonic() <= 0:
+            raise TimeoutError("agent time budget exhausted")
         if self.reranker == "strata":
-            verdict = run_case(case, self.rerank_client, self.rerank_model,
-                               reasoning_effort="none")
+            request = request_for(case, self.rerank_model, reasoning_effort="none")
+            request_start = time.perf_counter()
+            raw = await self.rerank_client.chat(request["messages"], self.rerank_model,
+                                                temperature=0, reasoning_effort="none",
+                                                max_tokens=request["max_tokens"])
+            verdict = {"provider": "strata", "request_payload": request, "raw_response": raw,
+                       "provider_call_wall_s": time.perf_counter() - request_start}
             self.last_audit = verdict
-            if verdict["status"] != "success":
-                raise RuntimeError(f"Strata rerank failed: {verdict.get('error')}")
+            verdict["ranking"] = parse_ranking(raw, case)
+            verdict["status"] = "success"
             ranked = verdict["ranking"]
             score_kind = "listwise_rank_only"
         else:
-            verdict = run_jev(case, self.rerank_client, threshold=self.jev_threshold)
+            payload = jev_payload(case)
+            request_start = time.perf_counter()
+            raw = await self.rerank_client.decide(payload, deadline=deadline)
+            request_wall = time.perf_counter() - request_start
+            self.last_audit = {"provider": "jev", "request_payload": payload,
+                               "raw_response": raw, "provider_call_wall_s": request_wall}
+            verdict = run_jev(case, self.rerank_client, threshold=self.jev_threshold,
+                              raw_response=raw)
+            verdict["timing"]["provider_call_wall_s"] = request_wall
+            verdict["timing"]["e2e_s"] += request_wall
             self.last_audit = verdict
             ranked = verdict["ranking"]
             if self.filter_mode:

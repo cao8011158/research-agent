@@ -12,7 +12,7 @@ class Provider:
     def __init__(self):
         self.calls = []
 
-    async def call(self, name, args):
+    async def call(self, name, args, *, deadline):
         self.calls.append((name, args))
         return {"results": [{"node_id": "p1", "source_url": "https://source.example/p1"}]}
 
@@ -32,7 +32,7 @@ class Client:
         self.responses = list(responses)
         self.inputs = []
 
-    def chat(self, messages, model, **kw):
+    async def chat(self, messages, model, **kw):
         self.inputs.append((json.loads(json.dumps(messages)), model, kw))
         return self.responses.pop(0)
 

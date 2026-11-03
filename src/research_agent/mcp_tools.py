@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from contextlib import AsyncExitStack
 import os
+import time
 from collections.abc import Mapping
 
 PUBLIC_NAMES = {"neo4j_get_schema": "get-schema", "neo4j_read_cypher": "read-cypher"}
@@ -70,13 +71,15 @@ class Neo4jMCPTools:
         if stack is not None:
             await stack.__aexit__(exc_type, exc_value, traceback)
 
-    async def call(self, name: str, args: Mapping) -> dict:
+    async def call(self, name: str, args: Mapping, *, deadline: float) -> dict:
         if name not in PUBLIC_NAMES:
             raise ValueError(f"unknown Neo4j MCP tool: {name}")
         if self._session is None:
             raise RuntimeError("Neo4j MCP session is not started")
         if not isinstance(args, Mapping):
             raise ValueError("tool arguments must be an object")
+        if deadline - time.monotonic() <= 0:
+            raise TimeoutError("agent time budget exhausted")
         result = await self._session.call_tool(PUBLIC_NAMES[name], arguments=dict(args))
         # Preserve the SDK's error flag, typed content, and structured result. A
         # server error must reach the model as an error, never as a fabricated answer.

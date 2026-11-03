@@ -1,5 +1,6 @@
 import asyncio
 import sys
+import time
 from types import ModuleType, SimpleNamespace
 
 import pytest
@@ -86,7 +87,8 @@ def test_official_sdk_handshake_discovery_call_and_close(monkeypatch):
         async with Neo4jMCPTools(env=ENV) as adapter:
             assert {tool["function"]["name"] for tool in adapter.tools} == {
                 "neo4j_get_schema", "neo4j_read_cypher"}
-            return await adapter.call("neo4j_read_cypher", {"query": "RETURN 1"})
+            return await adapter.call("neo4j_read_cypher", {"query": "RETURN 1"},
+                                      deadline=time.monotonic() + 5)
 
     result = run(exercise())
     assert result["is_error"] is True
@@ -102,4 +104,5 @@ def test_official_sdk_handshake_discovery_call_and_close(monkeypatch):
 def test_rejects_write_tool_even_if_server_were_to_advertise_it():
     adapter = Neo4jMCPTools(env=ENV)
     with pytest.raises(ValueError):
-        run(adapter.call("neo4j_write_cypher", {"query": "CREATE (n)"}))
+        run(adapter.call("neo4j_write_cypher", {"query": "CREATE (n)"},
+                         deadline=time.monotonic() + 5))

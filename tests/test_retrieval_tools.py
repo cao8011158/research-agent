@@ -1,3 +1,6 @@
+import asyncio
+import time
+
 from research_agent.retrieval_tools import RetrievalTools
 
 
@@ -39,7 +42,7 @@ class Dense:
 class Encoder:
     model_id, query_model_id, dimension = "doc", "query", 2
 
-    def encode_query(self, queries):
+    async def encode_query_async(self, queries, *, deadline):
         assert queries == ["method question"]
         return [[1, 0]]
 
@@ -48,7 +51,7 @@ class Encoder:
 
 
 class RankClient:
-    def chat(self, messages, model, **kwargs):
+    async def chat(self, messages, model, **kwargs):
         import json
         candidates = json.loads(messages[1]["content"])["candidates"]
         assert len(candidates) == 2
@@ -63,7 +66,8 @@ def test_union_preserves_bm25_only_hit_and_hydrates_by_id_once():
     retrieval = RetrievalTools(bm, Dense(), Encoder(), run_id="r", graph_namespace="g",
                                rerank_client=RankClient(), rerank_model="loaded")
     cold_reads = bm.records["Paper"].reads
-    out = retrieval.search_nodes("method question", node_types=["Paper"])
+    out = asyncio.run(retrieval.search_nodes("method question", node_types=["Paper"],
+                                             deadline=time.monotonic() + 5))
     assert bm.queries == [("method question", ["Paper"], 10)]
     assert out["candidate_count"] == 2
     assert [r["node_id"] for r in out["results"]] == ["p2", "p1"]

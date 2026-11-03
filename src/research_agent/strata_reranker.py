@@ -32,6 +32,24 @@ def discover(client, requested_model=None):
     start = time.perf_counter()
     health = client.get("/health")
     models = client.get("/v1/models")
+    model = _selected_model(health, models, requested_model)
+    props = client.get("/props")
+    metrics = client.get("/metrics")
+    return _discovery_record(health, models, props, metrics, model, start)
+
+
+async def discover_async(client, requested_model=None):
+    """Use the same loaded-model validation without blocking the agent event loop."""
+    start = time.perf_counter()
+    health = await client.get("/health")
+    models = await client.get("/v1/models")
+    model = _selected_model(health, models, requested_model)
+    props = await client.get("/props")
+    metrics = await client.get("/metrics")
+    return _discovery_record(health, models, props, metrics, model, start)
+
+
+def _selected_model(health, models, requested_model):
     if health.get("loaded") is not True:
         raise ValueError("/health does not report a loaded model")
     loaded = [item["id"] for item in models.get("data", [])
@@ -44,8 +62,10 @@ def discover(client, requested_model=None):
     model = requested_model or loaded[0]
     if model not in loaded:
         raise ValueError("selected model is not loaded")
-    props = client.get("/props")
-    metrics = client.get("/metrics")
+    return model
+
+
+def _discovery_record(health, models, props, metrics, model, start):
     engine = metrics.get("engine", {})
     return {"model": model, "health": health, "models": models, "props": props,
             "metrics": metrics, "runtime": {

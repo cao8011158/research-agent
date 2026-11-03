@@ -4,8 +4,8 @@ The publisher owns constraints and writes. This module only reads one run_id.
 """
 from __future__ import annotations
 
-import asyncio
 from collections.abc import Mapping
+import time
 
 RELATIONS = frozenset({"HAS_VERSION", "HAS_SOURCE", "HAS_ITEM", "RESOLVES_TO", "MEMBER_OF"})
 LABELS = frozenset({"Paper", "PaperVersion", "Source", "SourceItem", "Contribution", "ResearchProblem", "Method", "Benchmark", "ResearchArea"})
@@ -110,21 +110,26 @@ class GraphTools:
         self.run_id = _id(run_id)
         self.database = database
 
-    def _query(self, statement: str, parameters: dict) -> list[dict]:
+    async def _query(self, statement: str, parameters: dict, deadline: float) -> list[dict]:
         from neo4j import unit_of_work
 
-        @unit_of_work(timeout=30)
-        def read(tx):
-            return [dict(record) for record in tx.run(statement, **parameters)]
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise TimeoutError("agent time budget exhausted")
 
-        with self.driver.session(database=self.database) as session:
-            return session.execute_read(read)
+        @unit_of_work(timeout=min(30, remaining))
+        async def read(tx):
+            result = await tx.run(statement, **parameters)
+            return [dict(record) async for record in result]
 
-    async def call(self, name: str, args: Mapping) -> object:
+        async with self.driver.session(database=self.database) as session:
+            return await session.execute_read(read)
+
+    async def call(self, name: str, args: Mapping, *, deadline: float) -> object:
         if not isinstance(args, Mapping):
             raise ValueError("tool arguments must be an object")
         if name == "get_node":
-            rows = await asyncio.to_thread(self._query, GET_NODE, {"run_id": self.run_id, "node_id": _id(args.get("node_id"))})
+            rows = await self._query(GET_NODE, {"run_id": self.run_id, "node_id": _id(args.get("node_id"))}, deadline)
             return rows[0] if rows else None
         if name == "expand_neighbors":
             node_id = _id(args.get("node_id"))
@@ -138,18 +143,18 @@ class GraphTools:
             rel = "|".join(sorted(set(relations)))
             pattern = {"out": f"-[r:{rel}]->", "in": f"<-[r:{rel}]-", "both": f"-[r:{rel}]-"}[direction]
             statement = EXPAND.replace("PATTERN_PLACEHOLDER", pattern)
-            rows = await asyncio.to_thread(self._query, statement,
-                                           {"run_id": self.run_id, "node_id": node_id, "limit": _limit(args.get("limit", 20))})
+            rows = await self._query(statement,
+                                     {"run_id": self.run_id, "node_id": node_id, "limit": _limit(args.get("limit", 20))}, deadline)
             return rows
         if name in {"find_shared_papers", "get_evidence"}:
             ids = _ids(args.get("node_ids"))
             limit = _limit(args.get("limit", 20))
             params = {"run_id": self.run_id, "node_ids": ids, "limit": limit}
             if name == "find_shared_papers":
-                return await asyncio.to_thread(self._query, SHARED_PAPERS, {**params, "target_count": len(ids)})
-            entity_rows = await asyncio.to_thread(self._query, EVIDENCE_ENTITY, params)
+                return await self._query(SHARED_PAPERS, {**params, "target_count": len(ids)}, deadline)
+            entity_rows = await self._query(EVIDENCE_ENTITY, params, deadline)
             if len(entity_rows) >= limit:
                 return entity_rows
-            item_rows = await asyncio.to_thread(self._query, EVIDENCE_ITEM, {**params, "limit": limit - len(entity_rows)})
+            item_rows = await self._query(EVIDENCE_ITEM, {**params, "limit": limit - len(entity_rows)}, deadline)
             return entity_rows + item_rows
         raise ValueError(f"unknown graph tool: {name}")

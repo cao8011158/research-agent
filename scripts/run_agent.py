@@ -11,8 +11,8 @@ import subprocess
 import sys
 
 from research_agent.harness import AgentHarness, Limits
-from research_agent.llm import StrataClient
-from research_agent.strata_reranker import _clean, discover
+from research_agent.llm import AsyncStrataClient
+from research_agent.strata_reranker import _clean, discover_async
 
 
 def _write_trace(path: Path, trace: dict) -> None:
@@ -32,23 +32,24 @@ async def run(args, *, on_event=None):
     from kg_builder.bm25_retrieval import BM25Index
     from kg_builder.embeddings import VoyageEmbeddingModel
     from kg_builder.persistent_dense import PersistentDenseIndex
-    from research_agent.retrieval_tools import RetrievalTools
+    from research_agent.retrieval_tools import (AsyncJevClient, AsyncVoyageQueryEncoder,
+                                                RetrievalTools)
 
     key = os.environ["STRATA_API_KEY"]
-    client = StrataClient(args.base_url, key, timeout=min(args.strata_timeout, args.timeout))
     commit = _source_commit()
-    runtime = await asyncio.to_thread(discover, client, args.model)
-    model = runtime["model"]
     async with AsyncExitStack() as stack:
+        client = await stack.enter_async_context(AsyncStrataClient(
+            args.base_url, key, timeout=min(args.strata_timeout, args.timeout)))
+        runtime = await discover_async(client, args.model)
+        model = runtime["model"]
         bm25 = BM25Index(args.bm25_index, expected_run_id=args.run_id)
         stack.callback(bm25.close)
-        encoder = VoyageEmbeddingModel(max_concurrency=1)
+        encoder = AsyncVoyageQueryEncoder(VoyageEmbeddingModel(max_concurrency=1))
         dense = PersistentDenseIndex(args.dense_index, expected_run_id=args.run_id,
                                      expected_graph_namespace=args.graph_namespace,
                                      expected_model_id=encoder.model_id)
         if args.reranker == "jev":
-            from kg_builder.decision_api import JevClient
-            rerank_client = JevClient(max_concurrency=1)
+            rerank_client = await stack.enter_async_context(AsyncJevClient())
         else:
             rerank_client = client
         retrieval = RetrievalTools(bm25, dense, encoder, run_id=args.run_id,
@@ -58,11 +59,11 @@ async def run(args, *, on_event=None):
                                    filter_mode=args.jev_filter)
         providers = [retrieval]
         if args.tool_mode in ("custom", "both"):
-            from neo4j import GraphDatabase
+            from neo4j import AsyncGraphDatabase
             from research_agent.graph_tools import GraphTools
-            driver = GraphDatabase.driver(os.environ["NEO4J_URI"],
+            driver = AsyncGraphDatabase.driver(os.environ["NEO4J_URI"],
                 auth=(os.environ["NEO4J_USERNAME"], os.environ["NEO4J_PASSWORD"]))
-            stack.callback(driver.close)
+            stack.push_async_callback(driver.close)
             providers.append(GraphTools(driver, args.graph_namespace, database=args.neo4j_database))
         if args.tool_mode in ("mcp", "both"):
             from research_agent.mcp_tools import Neo4jMCPTools
