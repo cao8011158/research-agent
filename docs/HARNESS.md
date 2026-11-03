@@ -10,6 +10,13 @@ python scripts/run_agent.py "Which methods address this research problem?" --run
 
 The output directory must be new. It is created before runtime initialization, so a setup failure leaves a sanitized `initialization_failed` trace. During a run, `trace.json` is checkpointed after model and tool events, and brief progress events go to stderr. The trace contains the original question, each agent search query, model responses, tool call arguments and results, errors, elapsed times, index identity, runtime discovery, source commit, and prompt hash. The source commit is resolved from the script's repository even when called from another working directory. Secret values are redacted before writing. A budget or malformed model response produces `status: incomplete` with a stop reason and no invented answer. The CLI exits 2 for an incomplete run.
 
-The graph's fixed schema includes nine labels and five relationships; search results by themselves do not establish graph edges. This batch has no optional prompt skills or web tool. Live GPU, service, full-corpus, and paid query-embedding acceptance must be recorded separately from offline tests.
+The graph's fixed schema includes nine labels and five relationships; search results by themselves do not establish graph edges. Live GPU, service, full-corpus, and paid query-embedding acceptance must be recorded separately from offline tests.
+
+For a three-arm source comparison, use `--source-mode kg`, `--source-mode kg-web`, or `--source-mode web`. All three explicit modes use the same evidence-grounding system prompt and model settings; only registered tools differ. `kg` uses the existing retrieval and selected `--tool-mode` graph providers. `kg-web` adds Tavily `web_search` to those providers. `web` registers only `web_search` and does not load KG indexes or initialize Voyage, Neo4j, or MCP. Web modes require `TAVILY_API_KEY` in the environment. The web-only mode needs no KG index or namespace arguments and rejects them if supplied. Each Tavily call uses basic general search with at most five ranked title, URL, and excerpt results. The trace records `source_mode` and the effective prompt hash, including initialization failures. Invocations without `--source-mode` retain the legacy KG prompt and arguments.
+
+```powershell
+python scripts/run_agent.py "Which methods address this research problem?" --source-mode web --output-dir C:\data\agent-web-001
+python scripts/run_agent.py "Which methods address this research problem?" --source-mode kg-web --run-id RUN --graph-namespace NAMESPACE --bm25-index C:\data\bm25 --dense-index C:\data\hnsw --output-dir C:\data\agent-combined-001 --tool-mode custom
+```
 
 For the sequential user-run Colab experiment, see [COLAB_KG_AGENT.md](COLAB_KG_AGENT.md). It requires pinned published code commits and a verified query bundle; it does not require a PostgreSQL service in Colab.

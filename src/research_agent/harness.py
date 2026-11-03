@@ -14,6 +14,7 @@ from research_agent.strata_reranker import _clean
 
 BASE_PROMPT = files("research_agent").joinpath("prompts/base_system.txt").read_text(encoding="utf-8")
 PROMPT_SHA256 = hashlib.sha256(BASE_PROMPT.encode("utf-8")).hexdigest()
+COMPARISON_PROMPT = files("research_agent").joinpath("prompts/source_comparison.txt").read_text(encoding="utf-8")
 
 
 @dataclass(frozen=True)
@@ -37,9 +38,13 @@ class Limits:
 
 
 class AgentHarness:
-    def __init__(self, client, model: str, providers, *, limits=Limits(), api_key="", source_commit=None):
+    def __init__(self, client, model: str, providers, *, limits=Limits(), api_key="", source_commit=None,
+                 system_prompt: str = BASE_PROMPT, source_mode: str | None = None,
+                 extra_secrets: tuple[str, ...] = ()):
         self.client, self.model, self.providers, self.limits = client, model, list(providers), limits
         self.api_key, self.source_commit = api_key, source_commit
+        self.extra_secrets = extra_secrets
+        self.system_prompt, self.source_mode = system_prompt, source_mode
         self.specs = []
         self.handlers = {}
         for provider in self.providers:
@@ -57,16 +62,24 @@ class AgentHarness:
             raise ValueError("question must be nonempty")
         started = time.monotonic()
         deadline = started + self.limits.timeout_s
-        messages = [{"role": "system", "content": BASE_PROMPT},
+        messages = [{"role": "system", "content": self.system_prompt},
                     {"role": "user", "content": question}]
         trace = {"schema": "kg-agent-trace/1", "question": question,
                  "model": self.model, "source_commit": self.source_commit,
-                 "prompt_sha256": PROMPT_SHA256, "limits": asdict(self.limits),
+                 "prompt_sha256": hashlib.sha256(self.system_prompt.encode("utf-8")).hexdigest(),
+                 "limits": asdict(self.limits),
                  "tools": self.specs, "events": [], "messages": messages,
                  "search_queries": [], "status": "incomplete", "answer": None}
+        if self.source_mode is not None:
+            trace["source_mode"] = self.source_mode
+        def sanitized():
+            value = _clean(trace, self.api_key)
+            for secret in self.extra_secrets:
+                value = _clean(value, secret)
+            return value
         def emit(stage, **details):
             if on_event is not None:
-                on_event(stage, _clean(trace, self.api_key), details)
+                on_event(stage, sanitized(), details)
 
         emit("started")
         tool_count = 0
@@ -171,7 +184,7 @@ class AgentHarness:
                     from jsonschema import validate
                     provider, schema = self.handlers[name]
                     validate(args, schema)
-                    if name == "search_nodes":
+                    if name in ("search_nodes", "web_search"):
                         trace["search_queries"].append(args["query"])
                     remaining = deadline - time.monotonic()
                     if remaining <= 0:
@@ -209,4 +222,4 @@ class AgentHarness:
         trace["elapsed_s"] = time.monotonic() - started
         trace["tool_call_count"] = tool_count
         emit("finished", status=trace["status"])
-        return _clean(trace, self.api_key)
+        return sanitized()
