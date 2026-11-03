@@ -101,6 +101,7 @@ def run_case(case, client, model, *, reasoning_effort="none", max_tokens=4096):
         call_start = time.perf_counter()
         response = client.chat(payload["messages"], model, temperature=0,
                                reasoning_effort=reasoning_effort, max_tokens=max_tokens)
+        call_s = time.perf_counter() - call_start
         record["raw_response"] = response
         record["usage"] = response.get("usage") if isinstance(response, dict) else None
         record["ranking"] = parse_ranking(response, case)
@@ -108,6 +109,8 @@ def run_case(case, client, model, *, reasoning_effort="none", max_tokens=4096):
         record["resolved_model"] = response.get("model")
         record["status"] = "success"
     except Exception as exc:
+        if call_start is not None and call_s is None:
+            call_s = time.perf_counter() - call_start
         record["status"] = "failed"
         record["error"] = {"type": type(exc).__name__, "message": str(exc)}
         if hasattr(exc, "read"):
@@ -118,9 +121,6 @@ def run_case(case, client, model, *, reasoning_effort="none", max_tokens=4096):
                     "body": body.decode("utf-8", errors="replace")}
             except Exception as body_exc:
                 record["http_error_response"] = {"read_error": str(body_exc)}
-    finally:
-        if call_start is not None:
-            call_s = time.perf_counter() - call_start
     record["timing"] = {"kind": "fresh", "started_at": started, "finished_at": utc_now(),
                         "e2e_s": time.perf_counter() - start,
                         "provider_call_wall_s": call_s}

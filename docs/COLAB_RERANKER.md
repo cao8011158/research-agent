@@ -18,7 +18,7 @@ pip install -e '.[test]'
 python -m pytest -q
 ```
 
-`STRATA_API_KEY` must be set in the Colab environment for the already running server; do not write it in a notebook cell, ZIP, log, or report. The runner reads it only from that variable. The server defaults to `http://127.0.0.1:8081`. If `/v1/models` reports more than one loaded model, pass `--model MODEL_ID` explicitly.
+`STRATA_API_KEY` must be set in the Colab environment for the already running server. The deployment notebook may generate and set this key in memory; do not paste a literal key into a cell or save it in the export. The runner reads it only from that variable. The server defaults to `http://127.0.0.1:8081`. If `/v1/models` reports more than one loaded model, pass `--model MODEL_ID` explicitly.
 
 ## Import the frozen data
 
@@ -136,4 +136,33 @@ subprocess.run([
 
 Preserve the original 10-case files and metric report. The evaluator requires complete, matching case/result/qrels coverage and will reject an incomplete arm.
 
-Keep the result JSON, metrics JSON, GPU snapshots if collected, and the resolved repository commit SHA with your Colab artifacts. Do not include model weights or credentials.
+## Export the Colab evidence
+
+After the ranking and evaluation cells finish, run this Python cell. It archives only the reranker output directory, optional GPU snapshots, and the checked-out code SHA into the already mounted experiment folder. The destination must already exist; the cell refuses to replace a prior ZIP. The model weights and API key are not included.
+
+```python
+from pathlib import Path
+from zipfile import ZipFile, ZIP_DEFLATED
+from datetime import datetime, timezone
+import json
+import subprocess
+
+run = Path('/content/strata-reranker-none')
+drive_dir = Path('/content/drive/MyDrive/research-agent-reranker-controlled-20261103')
+assert drive_dir.is_dir(), 'Mount Drive and verify the experiment folder first'
+assert (run / 'strata_results.json').is_file(), 'Run the reranker first'
+commit = subprocess.check_output(['git', '-C', str(ROOT), 'rev-parse', 'HEAD'], text=True).strip()
+stamp = datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')
+archive_path = drive_dir / f'strata-reranker-{stamp}.zip'
+assert not archive_path.exists(), 'Choose a new export filename'
+with ZipFile(archive_path, 'x', compression=ZIP_DEFLATED) as archive:
+    for path in sorted(run.rglob('*')):
+        if path.is_file():
+            archive.write(path, f'strata-reranker-none/{path.relative_to(run).as_posix()}')
+    for name in ('strata-reranker-gpu-before.txt', 'strata-reranker-gpu-after.txt'):
+        path = Path('/content') / name
+        if path.is_file():
+            archive.write(path, f'gpu/{name}')
+    archive.writestr('code_commit.json', json.dumps({'commit': commit}, indent=2))
+print('Exported', archive_path)
+```

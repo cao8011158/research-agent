@@ -5,7 +5,7 @@ from tempfile import TemporaryDirectory
 import pytest
 
 from research_agent.controlled_evaluation import evaluate
-from research_agent.strata_reranker import discover, parse_ranking, request_for, run_package
+from research_agent.strata_reranker import discover, parse_ranking, request_for, run_case, run_package
 
 
 CASE = {"query_id": "Q01", "query": "Compare A and B", "target_type": "paper",
@@ -133,6 +133,37 @@ def test_http_exception_keeps_response_and_wall_time():
         assert row["http_error_response"]["status"] == 500
         assert row["timing"]["provider_call_wall_s"] >= 0
         assert "session-key" not in (out / "cases" / "001.json").read_text(encoding="utf-8")
+
+
+@pytest.mark.parametrize("response,expected_status", [
+    (answer(), "success"), (answer(content="not JSON"), "failed")])
+def test_http_wall_time_excludes_validation(monkeypatch, response, expected_status):
+    import research_agent.strata_reranker as module
+
+    clock = iter([0.0, 1.0, 3.0, 13.0])
+    monkeypatch.setattr(module.time, "perf_counter", lambda: next(clock))
+    result = run_case(CASE, FakeClient(response), "strata")
+    assert result["status"] == expected_status
+    assert result["timing"]["provider_call_wall_s"] == 2.0
+    assert result["timing"]["e2e_s"] == 13.0
+
+
+def test_http_exception_wall_time_excludes_error_read(monkeypatch):
+    import research_agent.strata_reranker as module
+    from urllib.error import HTTPError
+    from io import BytesIO
+
+    class ErrorClient(FakeClient):
+        def chat(self, messages, model, **kwargs):
+            raise HTTPError("http://localhost", 500, "failure", {}, BytesIO(b"body"))
+
+    clock = iter([0.0, 1.0, 3.0, 13.0])
+    monkeypatch.setattr(module.time, "perf_counter", lambda: next(clock))
+    result = run_case(CASE, ErrorClient(), "strata")
+    assert result["status"] == "failed"
+    assert result["http_error_response"]["body"] == "body"
+    assert result["timing"]["provider_call_wall_s"] == 2.0
+    assert result["timing"]["e2e_s"] == 13.0
 
 
 def test_multiple_models_require_selection():
