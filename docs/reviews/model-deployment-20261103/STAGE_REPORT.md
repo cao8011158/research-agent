@@ -2,7 +2,7 @@
 
 ## Current status
 
-The user cancelled agent control of Colab and chose to execute supplied commands manually. The local MCP connection process was stopped cleanly. Deployment candidate `aff5db417a1aac7ca3b205d4b5dc7c5f8091b5f8` is published on `codex/colab-strata-experiments` for user-run code tests and preflight in Colab. **No project runtime tests or model downloads have started; the candidate is not accepted.** No Neo4j, retrieval, reranker, search, or planning implementation belongs to this stage. Earlier interrupted experimental drafts remain untracked and are excluded from this delivery.
+The user executes all Colab commands manually; remote control is cancelled. Deployment code candidate `aff5db417a1aac7ca3b205d4b5dc7c5f8091b5f8` is published on `codex/colab-strata-experiments`. The user reported **5 tests passed in 0.03 seconds, Preflight PASS, and real Smoke PASS** after changing the service and test URL to port **8081**. The basic deployment/call loop has therefore passed according to user-provided outputs. These are not independently reproduced runs; the remote `smoke.json` and logs have not yet been downloaded/reviewed. Retrieval quality, complex planning, performance and final independent acceptance remain untested. Earlier interrupted retrieval drafts remain untracked and excluded from delivery.
 
 - Repository: https://github.com/cao8011158/research-agent
 - Working branch: `codex/colab-strata-experiments`
@@ -84,3 +84,25 @@ Next user action: clone the feature branch at the supplied immutable commit, ins
 Committed 12 files, 809 insertions and one deletion as `aff5db417a1aac7ca3b205d4b5dc7c5f8091b5f8` (`Add Strata MTP deployment candidate for Colab validation`). `git push -u origin codex/colab-strata-experiments` succeeded, exit 0. A subsequent `git ls-remote` confirmed the exact remote candidate SHA and unchanged main `75a08ee785a02a8b6d0c17a10501f6fe076fbd57`. No PR was opened and no merge occurred. This report update is a later documentation-only commit; the user-run commands deliberately pin the code candidate above.
 
 Parent inspected the complete selected source files, notebook cells and authored tests. `git diff --cached --check` completed successfully before the candidate commit. Actual Colab unit test and preflight outputs are required next. No runtime pass/fail count can yet be reported. No independent runtime review has completed (0/3 completed rounds). Earlier retrieval drafts remain local and untracked, excluded from the remote commit.
+
+## Stage 7 — user-reported Colab code tests and preflight
+
+The user pasted outputs from the supplied checkout/test/preflight commands: `5 passed in 0.03s`; `Preflight PASS`. The output does not itself include the checkout SHA, so this is recorded as a report from the prescribed candidate commands, not an independently verified checkout or test run.
+
+Reported runtime: Linux x86_64, glibc 2.39, 12 CPUs; system RAM total 179,370,455,040 bytes, available 176,534,327,296; disk free 252,949,053,440 bytes at `/content`; NVIDIA A100-SXM4-80GB, total VRAM 85,899,345,920 bytes, free 85,095,088,128; driver 580.82.07; compute capability 8.0; `CUDA_VERSION` 13.0.3. All capacity checks returned true. No GPU probe error. The remote preflight artifact is `/content/strata-artifacts/preflight.json`; that file has not been independently downloaded.
+
+Next: install official Strata Terminal and inspect its version and IQ3_S/MTP launch plan. The runtime's CUDA_VERSION does not determine the engine package; the official component resolver checks driver and actual GPU architecture. The v0.2.10 CUDA 12 package covers sm_80. Do not downgrade the Colab driver or install a separate framework stack merely because CUDA_VERSION reports 13.
+
+## Stage 8 — user-reported official launch plan
+
+The user pasted a successful official plan (`schema_version: 1`, `ok: true`) for profile `launch-iq3_s-32k`. Settings: family qwen, model IQ3_S, context 32768, KV int8, vision off, parallel 1, drafting mtp, tuning skip, local access on port 8080, data directory `/content/strata-data`. No warnings. The planned download is 88.8 GB: main weights 83.6 GB plus MTP layer 5.2 GB; the missing engine is additional. The plan reports engine_missing true and engine_usable false, consistent with an engine not yet installed; it does not prove which engine will be acquired or that inference succeeds. The user did not paste Terminal version output, so the next startup instructions check it explicitly before the large download.
+
+Next user-run operation: launch the planned model using the official command with `--yes --no-tui`, a session API key passed via its environment variable, and a redacted startup log. Then run the repository's real `strata_smoke.py` to verify the loaded model/engine/context/MTP and execute plain chat plus the tool round trip. No remote control or local model test is involved.
+
+## Stage 9 — model prepared, port conflict, user-reported Smoke PASS
+
+The user pasted Terminal output confirming `strata 0.2.10 (build 0.1.56; python 3.12.15)`. The official launcher downloaded, verified, test-started and installed `0.1.56 linux-x86_64-cuda-cuda12`, then prepared the IQ3_S model and MTP layer. The first service start failed because port 8080 was already occupied. No process was killed. The supplied correction changes the launch port to 8081 and the smoke URL to `http://127.0.0.1:8081`, reusing the prepared files.
+
+The user subsequently reported `Smoke PASS; report: /content/strata-artifacts/smoke.json`. According to the inspected candidate script, a pass requires a loaded IQ3_S/Qwen3.8-Flash-Next model path, engine build `Strata 0.1.56`, at least 32K context, matching model aliases, actual drafter `mtp`, a nonempty ordinary chat, an actual `add_integers` tool call with validated arguments, and a completed final answer after the computed tool result is returned. This establishes the basic loop at the script's bounded acceptance level as reported by the user; it does not establish complex planning, retrieval quality, broader stability, or a measured speed target.
+
+The remote JSON and startup logs remain in Colab and have not been independently retrieved. Next user commands should archive the small evidence directory and provide a normal client usage example on port 8081. Keep source code candidate and runtime port recorded; do not silently treat the notebook's original 8080 default as the successful configuration. No main merge is authorized.
