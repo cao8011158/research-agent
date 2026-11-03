@@ -1,0 +1,9 @@
+{
+  "privacy-memory": "Which published methods address privacy risks in long-term conversational memory for LLM agents? Compare their mechanisms and reported evaluation evidence, and cite the sources for each claim.",
+  "temporal-graph": "Which published approaches use temporal knowledge graphs for long-term agent memory? Compare at least two approaches, their treatment of time or changing facts, and their reported evaluation evidence. Cite the sources and explain what the evidence leaves open.",
+  "scientific-api-benchmarks": "Which published benchmarks assess agents answering research questions grounded in scientific papers using scientific data APIs? Compare what their tasks and evaluation actually measure. Distinguish exact matches from related benchmarks and cite primary sources.",
+  "unsupported-relation": "For the Zep paper, distinguish its Graphiti-based method, the long-term memory problem it addresses, and the benchmarks the paper reports. Does the project knowledge graph explicitly encode SOLVES or EVALUATED_ON for these, or would such links require an inference? Cite the paper and distinguish what you can verify about the graph.",
+  "fixed-paper": "Identify arXiv:2501.13956. Trace its main contribution and reported evaluation back to the paper, and distinguish source claims from any inferred scientific relationships.",
+  "method-from-description": "Which published method uses configurable policies for people and events to control what an LLM agent can disclose from long-term memory? Identify the method and its paper, explain how the privacy controls work, and cite what the authors’ evaluation shows.",
+  "empty": "Does the project knowledge graph contain a source-backed method whose exact identifier is entity:does-not-exist? If you cannot verify the identifier, explain what the evidence supports."
+}
