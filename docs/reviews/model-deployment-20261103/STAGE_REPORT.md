@@ -2,13 +2,13 @@
 
 ## Current status
 
-The user cancelled agent control of Colab and chose to execute supplied commands manually. The local MCP connection process was stopped cleanly. The deployment candidate will be published on its feature branch so the user can clone the repository and execute code tests and preflight in Colab. **No project runtime tests or model downloads have started; the candidate is not accepted.** No Neo4j, retrieval, reranker, search, or planning implementation belongs to this stage. Earlier interrupted experimental drafts remain untracked and are excluded from this delivery.
+The user cancelled agent control of Colab and chose to execute supplied commands manually. The local MCP connection process was stopped cleanly. Deployment candidate `aff5db417a1aac7ca3b205d4b5dc7c5f8091b5f8` is published on `codex/colab-strata-experiments` for user-run code tests and preflight in Colab. **No project runtime tests or model downloads have started; the candidate is not accepted.** No Neo4j, retrieval, reranker, search, or planning implementation belongs to this stage. Earlier interrupted experimental drafts remain untracked and are excluded from this delivery.
 
 - Repository: https://github.com/cao8011158/research-agent
 - Working branch: `codex/colab-strata-experiments`
 - Baseline and current remote main last inspected: `75a08ee785a02a8b6d0c17a10501f6fe076fbd57`
 - Implementation: deployment agent (`gpt-6-sol`, medium); integration/reporting and independent review: parent agent.
-- Current changes: uncommitted; no merge authorization.
+- Deployment code candidate: `aff5db417a1aac7ca3b205d4b5dc7c5f8091b5f8`, committed and pushed for validation; no merge authorization.
 - Target runtime from user screenshots: A100 80 GB VRAM; approximately 167 GB system RAM; 368 GB local-scratch. These are screenshot observations, not a new runtime measurement.
 - Target model: original ISTA-DASLab Qwen3.8-Flash-Next GSQ-RCO IQ3_S, MTP only. DFlash2 must not be accepted as the active drafter.
 - Target release: Strata Terminal 0.2.10, Control and CUDA engine 0.1.56; actual installed versions and GPU architecture compatibility must be measured.
@@ -78,3 +78,9 @@ Two bounded static fixes were made before publication: the truncation regression
 Publication is explicitly a **validation candidate** for user-run Colab tests, not an accepted/released batch. The user's repository-based manual-test workflow requires making the source retrievable before test execution. No merge to main is authorized. The earlier ZIP is superseded by the published candidate because these two files changed.
 
 Next user action: clone the feature branch at the supplied immutable commit, install the minimal test extra, run `pytest -q tests`, then `scripts/colab_preflight.py` in Colab. Inspect those actual outputs before downloading or starting the model. Formal review/acceptance stays pending.
+
+## Stage 6 — candidate published; user commands supplied
+
+Committed 12 files, 809 insertions and one deletion as `aff5db417a1aac7ca3b205d4b5dc7c5f8091b5f8` (`Add Strata MTP deployment candidate for Colab validation`). `git push -u origin codex/colab-strata-experiments` succeeded, exit 0. A subsequent `git ls-remote` confirmed the exact remote candidate SHA and unchanged main `75a08ee785a02a8b6d0c17a10501f6fe076fbd57`. No PR was opened and no merge occurred. This report update is a later documentation-only commit; the user-run commands deliberately pin the code candidate above.
+
+Parent inspected the complete selected source files, notebook cells and authored tests. `git diff --cached --check` completed successfully before the candidate commit. Actual Colab unit test and preflight outputs are required next. No runtime pass/fail count can yet be reported. No independent runtime review has completed (0/3 completed rounds). Earlier retrieval drafts remain local and untracked, excluded from the remote commit.
