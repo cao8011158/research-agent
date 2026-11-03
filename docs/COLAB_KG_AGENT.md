@@ -107,29 +107,35 @@ print('Actual model, 32K context, MTP and tool continuation verified by smoke')
 
 The smoke makes model chat calls. It must confirm actual `/metrics.engine.drafting == 'mtp'`, model identity and context; the requested launch flags alone are insufficient. This smoke does **not** call Voyage or search the KG. No model search has run yet.
 
-## Cell 10 — explicitly enable bounded paid query calls
+## Cell 10 — define a bounded query experiment
 
-Set `VOYAGE_API_KEY` in the runtime's environment through Colab secrets or another private input. Every agent `search_nodes` call can invoke the paid Voyage **query** API; `--reranker jev` would add paid Jev calls and requires `TYPESAFE_API_KEY`. The cells above made neither call. The following gate is intentionally false until the human operator chooses to run the query experiment and sets a small run budget.
+Set `VOYAGE_API_KEY` in the runtime's environment through Colab secrets or another private input. Every agent `search_nodes` call invokes the paid Voyage **query** API. `--reranker jev` would add paid Jev calls and requires `TYPESAFE_API_KEY`; keep that as a separate experiment. The cells above made neither call. The initial three sessions below use one natural-language task across `custom`, `mcp`, and `both`, with small step, tool, and time limits.
 
 ```python
-ALLOW_QUERY_API = False  # Change manually to True only for the user-run experiment.
 MODES = ('custom', 'mcp', 'both')
 QUESTIONS = (
-    ('paper', 'Find the paper arxiv:2501.13956 (Zep), identify its source evidence, and distinguish graph facts from your interpretation.'),
-    ('method', 'What does Method entity:0012ecb7636053acec14be37acd3c204 describe, and which published paper evidence supports it?'),
-    ('problem', 'Explain ResearchProblem entity:0003138e920b56a3067f96806e2afed9 using source-linked evidence; state any missing relation.'),
-    ('benchmark', 'Inspect Benchmark entity:0014d3b42925cbe2170b2a71fed06811 (SciDataBench) and report what the graph can verify.'),
-    ('area', 'Inspect ResearchArea area:0b98f6203c42760b4410820f92137641 and trace one supported member to paper evidence.'),
+    ('privacy-memory', 'Use search_nodes to find privacy-sensitive methods for long-term conversational memory. Trace any candidate through published paper and source evidence; separate supported facts from plausible claims.'),
+    ('temporal-graph', 'Use search_nodes to find temporal or Graphiti-style memory architecture papers. Compare their stated contributions using source-linked evidence, and identify what the graph does not establish.'),
+    ('scientific-api-benchmarks', 'Use search_nodes to find benchmarks for paper-grounded scientific API agents. Explain which benchmark descriptions and paper sources are actually present, including an empty result if none qualify.'),
+    ('unsupported-relation', 'Search for a method and a research problem, then ask whether the graph proves a SOLVES or EVALUATED_ON edge between them. Cite only available evidence and state the relation boundary explicitly.'),
+    ('fixed-paper', 'Inspect paper arxiv:2501.13956 and trace its published source evidence without inventing scientific relations.'),
+    ('fixed-method', 'Inspect Method entity:0012ecb7636053acec14be37acd3c204 and its paper/source evidence.'),
     ('empty', 'Find a source-backed Method whose exact node ID is entity:does-not-exist; if absent, say so without inventing a match.'),
 )
-assert ALLOW_QUERY_API, 'Human operator must explicitly enable paid Voyage query calls'
+# Evaluator hints are kept outside the agent prompts; these are not gold answers.
+REFERENCE_HINTS = {
+    'fixed-paper': ('arxiv:2501.13956',),
+    'fixed-method': ('entity:0012ecb7636053acec14be37acd3c204',),
+    'privacy-memory': ('area:0b98f6203c42760b4410820f92137641',),
+    'scientific-api-benchmarks': ('entity:0014d3b42925cbe2170b2a71fed06811',),
+}
 assert os.environ.get('VOYAGE_API_KEY'), 'Set VOYAGE_API_KEY privately before continuing'
-MAX_RUNS = 3  # Start with one question across the three modes; raise deliberately.
+MAX_RUNS = 3  # One natural-language task across all three modes; extend after inspecting traces.
 RUNS = [(mode, label, question) for label, question in QUESTIONS for mode in MODES][:MAX_RUNS]
-print('Authorized user-run calls:', len(RUNS), 'agent sessions; each is capped at 4 steps, 6 tools and 180 seconds')
+print('First run:', len(RUNS), 'agent sessions; each has 4 steps, 6 tools, 180 seconds of harness time and a 240-second CLI limit')
 ```
 
-The fixed IDs seed questions, **not gold answers**. The published graph has `HAS_VERSION`, `HAS_SOURCE`, `HAS_ITEM`, `RESOLVES_TO`, and `MEMBER_OF`; it has no `SOLVES` or `EVALUATED_ON`. A plausible research claim from retrieved prose is not an observed graph edge. Include empty/error cases and record uncertainty rather than awarding correctness from a completed trace.
+The natural-language tasks exercise retrieval without giving the agent an exact ID. Reference hints can guide later human inspection but are **not gold answers**. The published graph has `HAS_VERSION`, `HAS_SOURCE`, `HAS_ITEM`, `RESOLVES_TO`, and `MEMBER_OF`; it has no `SOLVES` or `EVALUATED_ON`. A plausible research claim from retrieved prose is not an observed graph edge. Extend `MAX_RUNS` to include the explicit relation-boundary, fixed-ID, and absent-ID controls after inspecting the first traces; retain empty/error outcomes rather than awarding correctness from a completed trace.
 
 ## Cell 11 — run the three tool modes with fresh trace directories
 
